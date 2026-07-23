@@ -29,22 +29,54 @@ updates a day — fine for a pHAT, but also defaults to `QUIET_START=20 QUIET_EN
 Session reset is shown as a live countdown, weekly resets as day + time, matching the
 native report.
 
-## Hardware note
-
-Assumes a **Pi Zero W v1.1**. You might need to tweak things if using a different model.
-
 ## Install
 
+**Assumes a Pi Zero W v1.1. You might need to tweak things if using a different model.**
+
+### 1. Flash a new image
+
+Flash a new image to your SD Card using the [Raspberry P Imager](https://github.com/raspberrypi/rpi-imager) - I recommend `Raspberry Pi OS (Legacy, 32-bit) Lite`.
+
+Hit gear/⚙ for the pre-configuration once OS is selected:
+
+- Hostname: claudeink
+- Enable SSH
+- Username pi — the systemd unit hardcodes /home/pi/claudeink, so either use pi or remember to edit the unit later
+- Locale: your local timezone
+- Wifi + country
+
+Continue and wait for the flash to complete.
+
+### 2. Enable SPI and install the Inky library
+
 ```bash
-curl https://get.pimoroni.com/inky | bash      # say no to the extra examples
-git clone <your-repo> ~/claudeink && cd ~/claudeink
-sudo apt-get install -y python3-pip fonts-dejavu-core
+sudo raspi-config nonint do_spi 0
+sudo raspi-config nonint do_i2c 0
+sudo apt update && sudo apt full-upgrade -y   # go make a coffee, this is slow on a Zero
+sudo apt install -y python3-pip fonts-dejavu-core
+curl https://get.pimoroni.com/inky | bash     # say NO to the examples/docs prompts
+sudo reboot
+```
+
+### 3. Copy the project over
+
+Clone this repo, then modify the `claudeink.service` [unit file](#config) to meet your requirements, then from your machine, in the directory containing claudeink/:
+
+```bash
+scp -r claudeink pi@claudeink.local:~/
+```
+
+Then on the Pi:
+
+```bash
+cd ~/claudeink
 pip3 install -r requirements.txt
+
 ```
 
 Enable SPI and I2C via `sudo raspi-config` if the Pimoroni installer didn't.
 
-## Credentials
+### 4. Set Claude credentials
 
 The script reads `~/.claude/.credentials.json` — the same file Claude Code maintains.
 Copy it over from a machine where you're logged in:
@@ -61,8 +93,7 @@ Code client, not documented API, so treat them as the most fragile part of this 
 If refresh starts failing you'll see it in the journal and the clock gets a `!` prefix to
 show the data is stale; re-copy the credentials file to recover.
 
-Nothing about `/api/oauth/usage` is a supported interface either. It can change without
-warning.
+Nothing about `/api/oauth/usage` is a supported interface either. It can change without warning.
 
 ## Test
 
