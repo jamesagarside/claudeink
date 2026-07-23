@@ -95,8 +95,8 @@ The script reads `~/.claude/.credentials.json` — the same file Claude Code mai
 Copy it over from a machine where you're logged in:
 
 ```bash
-scp ~/.claude/.credentials.json pi@raspberrypi.local:~/.claude/.credentials.json
-ssh pi@raspberrypi.local chmod 600 ~/.claude/.credentials.json
+scp ~/.claude/.credentials.json pi@claudeink.local:~/.claude/.credentials.json
+ssh pi@claudeink.local chmod 600 ~/.claude/.credentials.json
 ```
 
 **Token refresh:** Claude Code isn't running on the Pi, so nobody is refreshing the access
