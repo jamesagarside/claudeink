@@ -1,0 +1,20 @@
+[Unit]
+Description=Claude usage tracker on Inky pHAT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/claudeink
+ExecStart=/usr/bin/python3 /home/pi/claudeink/run.py
+Environment=REFRESH_MINUTES=2
+Environment=PLAN_LABEL="Max 5x"
+Environment=WARN_AT=80
+Environment=QUIET_START=20
+Environment=QUIET_END=7
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
