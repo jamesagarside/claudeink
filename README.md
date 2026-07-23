@@ -37,6 +37,9 @@ native report.
 
 Flash a new image to your SD Card using the [Raspberry P Imager](https://github.com/raspberrypi/rpi-imager) - I recommend `Raspberry Pi OS (Legacy, 32-bit) Lite`.
 
+Bookworm (32-bit Lite) works too; the venv-based install below covers both. Check with
+`python3 -V` — 3.9 is Bullseye/Legacy, 3.11 is Bookworm.
+
 Hit gear/⚙ for the pre-configuration once OS is selected:
 
 - Hostname: claudeink
@@ -53,10 +56,13 @@ Continue and wait for the flash to complete.
 sudo raspi-config nonint do_spi 0
 sudo raspi-config nonint do_i2c 0
 sudo apt update && sudo apt full-upgrade -y   # go make a coffee, this is slow on a Zero
-sudo apt install -y python3-pip fonts-dejavu-core
-curl https://get.pimoroni.com/inky | bash     # say NO to the examples/docs prompts
+sudo apt install -y python3-pip python3-venv fonts-dejavu-core
 sudo reboot
 ```
+
+You do *not* need `curl https://get.pimoroni.com/inky | bash` — `requirements.txt` pulls
+the same library, and on Bookworm that installer drops it in its own
+`~/.virtualenvs/pimoroni` which the service can't see.
 
 ### 3. Copy the project over
 
@@ -70,11 +76,18 @@ Then on the Pi:
 
 ```bash
 cd ~/claudeink
-pip3 install -r requirements.txt
-
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
-Enable SPI and I2C via `sudo raspi-config` if the Pimoroni installer didn't.
+**Use a venv, not `pip3 install`.** On Bookworm (Python 3.11) a bare `pip3 install`
+fails with `error: externally-managed-environment` and installs nothing — the failure is
+easy to miss, and the first sign is `no inky detected (No module named 'inky')` in the
+journal, with the panel silently falling back to `frame.png`. The unit file's `ExecStart`
+points at `.venv/bin/python` for this reason.
+
+`--system-site-packages` lets the venv still see apt-installed `python3-rpi.gpio` /
+`python3-spidev` if you have them.
 
 ### 4. Set Claude credentials
 
@@ -98,8 +111,8 @@ Nothing about `/api/oauth/usage` is a supported interface either. It can change 
 ## Test
 
 ```bash
-python3 run.py --demo --once --png     # synthetic data, writes frame.png, no hardware needed
-python3 run.py --once                  # one real frame to the panel
+.venv/bin/python run.py --demo --once --png   # synthetic data, writes frame.png, no hardware needed
+.venv/bin/python run.py --once                # one real frame to the panel
 ```
 
 If no Inky is detected it falls back to writing `frame.png`, which is handy over ssh.

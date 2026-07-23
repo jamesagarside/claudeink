@@ -7,12 +7,14 @@ Wants=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/claudeink
-ExecStart=/usr/bin/python3 /home/pi/claudeink/run.py
+ExecStart=/home/pi/claudeink/.venv/bin/python /home/pi/claudeink/run.py
 Environment=REFRESH_MINUTES=2
 Environment=PLAN_LABEL="Max 5x"
 Environment=WARN_AT=80
 Environment=QUIET_START=20
 Environment=QUIET_END=7
+## Uncomment to flip the rendered image 180 degrees
+#Environment=FLIP=1
 Restart=always
 RestartSec=30
 
