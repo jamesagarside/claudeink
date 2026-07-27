@@ -521,7 +521,7 @@ class WavesharePanel:
                 self.partial = (
                     PARTIAL_REFRESH
                     and hasattr(self.epd, "displayPartial")
-                    and hasattr(self.epd, "displayPartialBaseImage")
+                    and hasattr(self.epd, "displayPartBaseImage")
                 )
                 self.awake = False
                 self.last_full = 0.0
@@ -557,7 +557,7 @@ class WavesharePanel:
         self.last_full = time.time()
         if self.partial:
             # flashing refresh that also primes the RAM for partials
-            self.epd.displayPartialBaseImage(buf)
+            self.epd.displayPartBaseImage(buf)
             self.awake = True
         else:
             self.epd.display(buf)
