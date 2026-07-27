@@ -1,0 +1,4 @@
+# Lean install for Waveshare 2.13" panels - skips the Inky stack (and numpy)
+Pillow>=8.0.0
+spidev
+gpiozero
