@@ -15,9 +15,10 @@ Environment=QUIET_START=20
 Environment=QUIET_END=7
 ## Uncomment to flip the rendered image 180 degrees
 #Environment=FLIP=1
-## Uncomment to serve the status web ui
-#Environment=WEB_UI=1
-#Environment=WEB_PORT=8080
+## Uncomment for flash-free partial updates (Waveshare V4/V3 only),
+## with a flashing ghost-clearing full refresh once an hour
+#Environment=PARTIAL_REFRESH=1
+#Environment=FULL_REFRESH_MINUTES=60
 Restart=always
 RestartSec=30
 

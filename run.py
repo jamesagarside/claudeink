@@ -16,11 +16,9 @@ Env config (all optional):
   WARN_AT            utilisation % at which bars switch to the accent colour, default 80
   QUIET_START        hour (0-23) to stop refreshing overnight, e.g. 23
   QUIET_END          hour (0-23) to resume, e.g. 7
-  WEB_UI             set to 1 to serve the status web ui
-  WEB_PORT           port for the web ui, default 8080
-  HISTORY_FILE       usage history for the web ui chart, default history.jsonl
-                     beside this script
-  HISTORY_DAYS       history retention in days, default 30
+  PARTIAL_REFRESH    set to 1 for flash-free partial updates (Waveshare V4/V3)
+  FULL_REFRESH_MINUTES  minutes between ghost-clearing full refreshes when
+                     partial refresh is on, default 60
 
 Flags:
   --demo   run with synthetic data, no network, no credentials
@@ -48,8 +46,8 @@ REFRESH_MINUTES = max(1, int(os.environ.get("REFRESH_MINUTES", "1")))
 WARN_AT = float(os.environ.get("WARN_AT", "80"))
 FLIP = os.environ.get("FLIP", "0") == "1"
 PLAN_LABEL = os.environ.get("PLAN_LABEL", "")
-WEB_UI = os.environ.get("WEB_UI", "0") == "1"
-WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
+PARTIAL_REFRESH = os.environ.get("PARTIAL_REFRESH", "0") == "1"
+FULL_REFRESH_MINUTES = max(1, int(os.environ.get("FULL_REFRESH_MINUTES", "60")))
 
 QUIET_START = os.environ.get("QUIET_START")
 QUIET_END = os.environ.get("QUIET_END")
@@ -489,6 +487,95 @@ class Panel:
         self.inky.set_image(img)
         self.inky.show()
 
+    def rest(self):
+        pass
+
+
+class WavesharePanel:
+    """Waveshare 2.13" 122x250 two-colour panel (V4/V3/V2 SSD1680 family).
+
+    The panel has no red, so the accent palette index renders as black.
+
+    With PARTIAL_REFRESH=1 (V4/V3 only) routine updates use the flash-free
+    partial waveform, with a flashing full refresh every
+    FULL_REFRESH_MINUTES to clear accumulated ghosting. Partial refresh
+    needs the controller's image RAM, so the panel then stays awake
+    between updates; rest() deep-sleeps it for quiet hours, and the next
+    update re-primes it with a full refresh.
+    """
+
+    size = (250, 122)
+    colours = (0, 1, 2)
+
+    def __init__(self):
+        last_exc = None
+        for module in ("epd2in13_V4", "epd2in13_V3", "epd2in13_V2"):
+            try:
+                lib = __import__("waveshare_epd." + module, fromlist=[module])
+                self.epd = lib.EPD()
+                self.epd.init()
+                self.epd.Clear(0xFF)
+                self.epd.sleep()
+                self.partial = (
+                    PARTIAL_REFRESH
+                    and hasattr(self.epd, "displayPartial")
+                    and hasattr(self.epd, "displayPartBaseImage")
+                )
+                self.awake = False
+                self.last_full = 0.0
+                log(
+                    "using waveshare driver %s%s"
+                    % (
+                        module,
+                        ", partial refresh on (full every %d min)"
+                        % FULL_REFRESH_MINUTES
+                        if self.partial
+                        else "",
+                    )
+                )
+                return
+            except Exception as exc:
+                last_exc = exc
+        raise RuntimeError("no waveshare 2.13 panel found: %s" % last_exc)
+
+    def show(self, img):
+        # palette indices -> bilevel: 0 white, 1 black, 2 accent (black here)
+        bw = img.point(lambda p: 255 if p == 0 else 0, mode="1")
+        buf = self.epd.getbuffer(bw)
+
+        if (
+            self.partial
+            and self.awake
+            and time.time() - self.last_full < FULL_REFRESH_MINUTES * 60
+        ):
+            self.epd.displayPartial(buf)
+            return
+
+        self.epd.init()
+        self.last_full = time.time()
+        if self.partial:
+            # flashing refresh that also primes the RAM for partials
+            self.epd.displayPartBaseImage(buf)
+            self.awake = True
+        else:
+            self.epd.display(buf)
+            self.epd.sleep()
+
+    def rest(self):
+        """Quiet-hours deep sleep for partial mode (full mode sleeps
+        after every update anyway)."""
+        if getattr(self, "awake", False):
+            self.epd.sleep()
+            self.awake = False
+
+
+def make_panel():
+    try:
+        return Panel()
+    except Exception as exc:
+        log("no inky detected (%s), trying waveshare" % exc)
+    return WavesharePanel()
+
 
 class NullPanel:
     """Used with --demo / --png when there's no hardware attached."""
@@ -497,6 +584,9 @@ class NullPanel:
     colours = (0, 1, 2)
 
     def show(self, img):
+        pass
+
+    def rest(self):
         pass
 
 
@@ -568,9 +658,9 @@ def main():
     png = "--png" in args
 
     try:
-        panel = NullPanel() if demo else Panel()
+        panel = NullPanel() if demo else make_panel()
     except Exception as exc:
-        log("no inky detected (%s), falling back to png output" % exc)
+        log("no display detected (%s), falling back to png output" % exc)
         panel = NullPanel()
         png = True
 
@@ -649,12 +739,14 @@ def main():
                 backoff = time.time() + 120
                 rows, stale = last_rows, True
 
+        quiet = in_quiet_hours()
+        if quiet and not once:
+            panel.rest()
+
         if rows is not None:
             last_rows = rows
-            img = render(panel.size, rows, panel.colours, stale=stale)
-            if web_state:
-                web_state.update(png_bytes(img), last_limits or [], stale, payload)
-            if once or forced or not in_quiet_hours():
+            if once or not quiet:
+                img = render(panel.size, rows, panel.colours, stale=stale)
                 panel.show(img)
                 if png:
                     log("wrote " + write_png(img))

@@ -29,6 +29,22 @@ updates a day — fine for a pHAT, but also defaults to `QUIET_START=20 QUIET_EN
 Session reset is shown as a live countdown, weekly resets as day + time, matching the
 native report.
 
+## Displays
+
+Works with an Inky pHAT (both 250×122 and 212×104) or a Waveshare 2.13" 122×250
+module (V4/V3/V2, the SSD1680 family) — the panel is auto-detected: Inky first,
+then Waveshare. The Waveshare drivers are vendored in `waveshare_epd/`, so
+nothing extra to install beyond `requirements-waveshare.txt`. Waveshare panels
+are two-colour, so the red warning accent renders black.
+
+On Waveshare V4/V3, `PARTIAL_REFRESH=1` switches routine updates to the panel's
+flash-free partial waveform, with a flashing full refresh every
+`FULL_REFRESH_MINUTES` (default 60) to clear the ghosting partial updates
+accumulate. Partial refresh needs the controller's image RAM, so the panel then
+stays awake between updates and deep-sleeps during quiet hours. Off by default:
+without the flag, behaviour is unchanged (full refresh + deep sleep every
+update, on every display).
+
 ## Install
 
 **Assumes a Pi Zero W v1.1. You might need to tweak things if using a different model.**
@@ -63,6 +79,17 @@ sudo reboot
 You do *not* need `curl https://get.pimoroni.com/inky | bash` — `requirements.txt` pulls
 the same library, and on Bookworm that installer drops it in its own
 `~/.virtualenvs/pimoroni` which the service can't see.
+
+**Waveshare panels:** use `requirements-waveshare.txt` instead of `requirements.txt`
+in the step below — it skips the Inky stack (and its numpy dependency, slow to build
+on a Zero). Prefer the apt packages so nothing builds from source:
+
+```bash
+sudo apt install -y python3-pil python3-spidev python3-gpiozero python3-lgpio
+```
+
+The `--system-site-packages` venv picks those up and `pip install` then has nothing
+left to do. No wiring needed if the module sits on the GPIO header as a HAT.
 
 ### 3. Copy the project over
 
@@ -115,7 +142,8 @@ Nothing about `/api/oauth/usage` is a supported interface either. It can change 
 .venv/bin/python run.py --once                # one real frame to the panel
 ```
 
-If no Inky is detected it falls back to writing `frame.png`, which is handy over ssh.
+If no Inky is detected it tries the Waveshare driver next, and only then falls back
+to writing `frame.png`, which is handy over ssh.
 
 ## Run as a service
 
@@ -159,10 +187,8 @@ All via environment (set them in the unit file):
 | `FLIP` | `0` | set `1` to rotate 180° |
 | `FONT_REGULAR` / `FONT_BOLD` | DejaVu | TTF fonts available on the system |
 | `CREDENTIALS` | `~/.claude/.credentials.json` | |
-| `WEB_UI` | `0` | set `1` to serve the status web ui |
-| `WEB_PORT` | `8080` | web ui port, used with `WEB_UI=1` |
-| `HISTORY_FILE` | `history.jsonl` beside `run.py` | where usage history is recorded for the web ui chart |
-| `HISTORY_DAYS` | `30` | history retention |
+| `PARTIAL_REFRESH` | `0` | set `1` for flash-free partial updates (Waveshare V4/V3 only; ignored elsewhere) |
+| `FULL_REFRESH_MINUTES` | `60` | with partial refresh on, minutes between flashing full refreshes that clear ghosting |
 
 Times are rendered in the Pi's local timezone — `sudo timedatectl set-timezone Europe/London`
 if you haven't already.
