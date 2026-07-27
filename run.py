@@ -430,6 +430,46 @@ class Panel:
         self.inky.show()
 
 
+class WavesharePanel:
+    """Waveshare 2.13" 122x250 two-colour panel (V4/V3/V2 SSD1680 family).
+
+    The panel has no red, so the accent palette index renders as black.
+    """
+
+    size = (250, 122)
+    colours = (0, 1, 2)
+
+    def __init__(self):
+        last_exc = None
+        for module in ("epd2in13_V4", "epd2in13_V3", "epd2in13_V2"):
+            try:
+                lib = __import__("waveshare_epd." + module, fromlist=[module])
+                self.epd = lib.EPD()
+                self.epd.init()
+                self.epd.Clear(0xFF)
+                self.epd.sleep()
+                log("using waveshare driver %s" % module)
+                return
+            except Exception as exc:
+                last_exc = exc
+        raise RuntimeError("no waveshare 2.13 panel found: %s" % last_exc)
+
+    def show(self, img):
+        # palette indices -> bilevel: 0 white, 1 black, 2 accent (black here)
+        bw = img.point(lambda p: 255 if p == 0 else 0, mode="1")
+        self.epd.init()
+        self.epd.display(self.epd.getbuffer(bw))
+        self.epd.sleep()
+
+
+def make_panel():
+    try:
+        return Panel()
+    except Exception as exc:
+        log("no inky detected (%s), trying waveshare" % exc)
+    return WavesharePanel()
+
+
 class NullPanel:
     """Used with --demo / --png when there's no hardware attached."""
 
@@ -486,9 +526,9 @@ def main():
     png = "--png" in args
 
     try:
-        panel = NullPanel() if demo else Panel()
+        panel = NullPanel() if demo else make_panel()
     except Exception as exc:
-        log("no inky detected (%s), falling back to png output" % exc)
+        log("no display detected (%s), falling back to png output" % exc)
         panel = NullPanel()
         png = True
 
