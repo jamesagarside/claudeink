@@ -20,6 +20,25 @@ its reset time, and a percentage. Clock top right.
 
 ![photo of claudeink running](claudeink.jpg)
 
+## Fork additions
+
+This fork extends [simonhearne/claudeink](https://github.com/simonhearne/claudeink) with:
+
+- **Waveshare 2.13" panel support** (122×250, V4/V3/V2 SSD1680 family). If no Inky is
+  detected, the vendored `waveshare_epd` driver takes over automatically. The panel is
+  two-colour, so the red warning accent renders black. The Inky path is unchanged.
+- **Status web UI.** A stdlib-only web server (see `web.py`, `WEB_PORT`, default 8080)
+  serves the exact frame shown on the panel plus a JSON status endpoint, with a
+  *Refresh now* button that wakes the render loop immediately — bypassing quiet hours
+  and API backoff, since it's an explicit request. `WEB_PORT=0` disables it.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/` | status page with the current frame and refresh button |
+| `/frame.png` | latest rendered frame |
+| `/status` | JSON: rows, updated timestamp, stale flag |
+| `POST /refresh` | force an immediate fetch + render |
+
 ## Refresh
 
 Refreshes every 5 minutes (`REFRESH_MINUTES=5`), sleeping to the boundary rather than
@@ -138,6 +157,7 @@ All via environment (set them in the unit file):
 | `FLIP` | `0` | set `1` to rotate 180° |
 | `FONT_REGULAR` / `FONT_BOLD` | DejaVu | TTF fonts available on the system |
 | `CREDENTIALS` | `~/.claude/.credentials.json` | |
+| `WEB_PORT` | `8080` | status web ui port, `0` disables |
 
 Times are rendered in the Pi's local timezone — `sudo timedatectl set-timezone Europe/London`
 if you haven't already.
