@@ -167,6 +167,8 @@ All via environment (set them in the unit file):
 | `FONT_REGULAR` / `FONT_BOLD` | DejaVu | TTF fonts available on the system |
 | `CREDENTIALS` | `~/.claude/.credentials.json` | |
 | `WEB_PORT` | `8080` | status web ui port, `0` disables |
+| `PARTIAL_REFRESH` | `0` | set `1` for flash-free partial updates (Waveshare V4/V3 only; ignored elsewhere). The panel stays awake between updates and deep-sleeps during quiet hours |
+| `FULL_REFRESH_MINUTES` | `60` | with partial refresh on, minutes between flashing full refreshes that clear ghosting |
 
 Times are rendered in the Pi's local timezone — `sudo timedatectl set-timezone Europe/London`
 if you haven't already.
