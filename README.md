@@ -28,15 +28,24 @@ This fork extends [simonhearne/claudeink](https://github.com/simonhearne/claudei
   detected, the vendored `waveshare_epd` driver takes over automatically. The panel is
   two-colour, so the red warning accent renders black. The Inky path is unchanged.
 - **Status web UI.** A stdlib-only web server (see `web.py`, `WEB_PORT`, default 8080)
-  serves the exact frame shown on the panel plus a JSON status endpoint, with a
-  *Refresh now* button that wakes the render loop immediately — bypassing quiet hours
-  and API backoff, since it's an explicit request. `WEB_PORT=0` disables it.
+  with a full-page, e-paper-styled companion to the panel: stat tiles with reset
+  countdowns and change-per-hour, pill bars for **every** limit window the API reports
+  (the panel only fits three), a usage-history chart with 6h/24h/7d/30d ranges and a
+  crosshair tooltip, and a live preview of the physical frame. The *Refresh now*
+  button wakes the render loop immediately — bypassing quiet hours and API backoff,
+  since it's an explicit request. `WEB_PORT=0` disables it.
+- **Usage history.** Every successful poll is appended to `history.jsonl`
+  (`HISTORY_FILE`; `HISTORY_DAYS` retention, default 30) and served to the chart with
+  bucket-max downsampling. Series are drawn achromatic — identity comes from
+  lightness, dash pattern, direct labels and the legend, matching the e-ink look.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `/` | status page with the current frame and refresh button |
+| `/` | full status page |
 | `/frame.png` | latest rendered frame |
-| `/status` | JSON: rows, updated timestamp, stale flag |
+| `/status` | JSON: all limit windows, updated timestamp, stale flag |
+| `/history?hours=N` | JSON usage history (optional `&points=M`) |
+| `/payload` | last raw API payload |
 | `POST /refresh` | force an immediate fetch + render |
 
 ## Refresh
