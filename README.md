@@ -42,7 +42,8 @@ This fork extends [simonhearne/claudeink](https://github.com/simonhearne/claudei
   (the panel only fits three), a usage-history chart with 6h/24h/7d/30d ranges and a
   crosshair tooltip, and a live preview of the physical frame. The *Refresh now*
   button wakes the render loop immediately — bypassing quiet hours and API backoff,
-  since it's an explicit request. `WEB_PORT=0` disables it.
+  since it's an explicit request. Opt-in: set `WEB_UI=1` (port via `WEB_PORT`,
+  default 8080).
 - **Usage history.** Every successful poll is appended to `history.jsonl`
   (`HISTORY_FILE`; `HISTORY_DAYS` retention, default 30) and served to the chart with
   bucket-max downsampling. Series are drawn achromatic — identity comes from
@@ -187,7 +188,8 @@ All via environment (set them in the unit file):
 | `FLIP` | `0` | set `1` to rotate 180° |
 | `FONT_REGULAR` / `FONT_BOLD` | DejaVu | TTF fonts available on the system |
 | `CREDENTIALS` | `~/.claude/.credentials.json` | |
-| `WEB_PORT` | `8080` | status web ui port, `0` disables |
+| `WEB_UI` | `0` | set `1` to serve the status web ui |
+| `WEB_PORT` | `8080` | web ui port, used with `WEB_UI=1` |
 | `PARTIAL_REFRESH` | `0` | set `1` for flash-free partial updates (Waveshare V4/V3 only; ignored elsewhere). The panel stays awake between updates and deep-sleeps during quiet hours |
 | `FULL_REFRESH_MINUTES` | `60` | with partial refresh on, minutes between flashing full refreshes that clear ghosting |
 | `HISTORY_FILE` | `history.jsonl` beside `run.py` | where usage history is recorded for the web ui chart |

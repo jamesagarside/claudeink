@@ -16,7 +16,8 @@ Env config (all optional):
   WARN_AT            utilisation % at which bars switch to the accent colour, default 80
   QUIET_START        hour (0-23) to stop refreshing overnight, e.g. 23
   QUIET_END          hour (0-23) to resume, e.g. 7
-  WEB_PORT           port for the status web ui, default 8080, 0 disables
+  WEB_UI             set to 1 to serve the status web ui
+  WEB_PORT           port for the web ui, default 8080
   PARTIAL_REFRESH    set to 1 for flash-free partial updates (Waveshare V4/V3)
   FULL_REFRESH_MINUTES  minutes between ghost-clearing full refreshes when
                      partial refresh is on, default 60
@@ -50,6 +51,7 @@ REFRESH_MINUTES = max(1, int(os.environ.get("REFRESH_MINUTES", "1")))
 WARN_AT = float(os.environ.get("WARN_AT", "80"))
 FLIP = os.environ.get("FLIP", "0") == "1"
 PLAN_LABEL = os.environ.get("PLAN_LABEL", "")
+WEB_UI = os.environ.get("WEB_UI", "0") == "1"
 WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
 PARTIAL_REFRESH = os.environ.get("PARTIAL_REFRESH", "0") == "1"
 FULL_REFRESH_MINUTES = max(1, int(os.environ.get("FULL_REFRESH_MINUTES", "60")))
@@ -670,7 +672,7 @@ def main():
         png = True
 
     web_state = None
-    if WEB_PORT and not once:
+    if WEB_UI and WEB_PORT and not once:
         try:
             import history
             import web
