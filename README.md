@@ -27,6 +27,15 @@ This fork extends [simonhearne/claudeink](https://github.com/simonhearne/claudei
 - **Waveshare 2.13" panel support** (122×250, V4/V3/V2 SSD1680 family). If no Inky is
   detected, the vendored `waveshare_epd` driver takes over automatically. The panel is
   two-colour, so the red warning accent renders black. The Inky path is unchanged.
+  Install with `requirements-waveshare.txt` instead of `requirements.txt` to skip the
+  Inky stack (and its numpy dependency — slow to install on a Zero).
+- **Flash-free partial refresh** (opt-in, Waveshare V4/V3 only). `PARTIAL_REFRESH=1`
+  switches routine updates to the panel's partial waveform — no black/white flash —
+  with a flashing full refresh every `FULL_REFRESH_MINUTES` (default 60) to clear
+  the ghosting partial updates accumulate. The controller must keep its image RAM
+  for partials, so the panel then stays awake between updates and deep-sleeps
+  during quiet hours. Off by default: without the flag, behaviour is identical to
+  upstream (full refresh + deep sleep every update).
 - **Status web UI.** A stdlib-only web server (see `web.py`, `WEB_PORT`, default 8080)
   with a full-page, e-paper-styled companion to the panel: stat tiles with reset
   countdowns and change-per-hour, pill bars for **every** limit window the API reports
@@ -92,6 +101,16 @@ You do *not* need `curl https://get.pimoroni.com/inky | bash` — `requirements.
 the same library, and on Bookworm that installer drops it in its own
 `~/.virtualenvs/pimoroni` which the service can't see.
 
+**Waveshare panels:** use `requirements-waveshare.txt` instead of `requirements.txt`
+in the step below, and prefer the apt packages so nothing builds from source:
+
+```bash
+sudo apt install -y python3-pil python3-spidev python3-gpiozero python3-lgpio
+```
+
+The `--system-site-packages` venv picks those up and `pip install` then has nothing
+left to do. No wiring needed if the module sits on the GPIO header as a HAT.
+
 ### 3. Copy the project over
 
 Clone this repo, then modify the `claudeink.service` [unit file](#config) to meet your requirements, then from your machine, in the directory containing claudeink/:
@@ -143,7 +162,9 @@ Nothing about `/api/oauth/usage` is a supported interface either. It can change 
 .venv/bin/python run.py --once                # one real frame to the panel
 ```
 
-If no Inky is detected it falls back to writing `frame.png`, which is handy over ssh.
+If no Inky is detected it tries the Waveshare driver next, and only then falls back
+to writing `frame.png`, which is handy over ssh. The web ui (default port 8080)
+serves the same frame at `/frame.png` either way.
 
 ## Run as a service
 
@@ -169,6 +190,8 @@ All via environment (set them in the unit file):
 | `WEB_PORT` | `8080` | status web ui port, `0` disables |
 | `PARTIAL_REFRESH` | `0` | set `1` for flash-free partial updates (Waveshare V4/V3 only; ignored elsewhere). The panel stays awake between updates and deep-sleeps during quiet hours |
 | `FULL_REFRESH_MINUTES` | `60` | with partial refresh on, minutes between flashing full refreshes that clear ghosting |
+| `HISTORY_FILE` | `history.jsonl` beside `run.py` | where usage history is recorded for the web ui chart |
+| `HISTORY_DAYS` | `30` | history retention |
 
 Times are rendered in the Pi's local timezone — `sudo timedatectl set-timezone Europe/London`
 if you haven't already.

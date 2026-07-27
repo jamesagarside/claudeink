@@ -20,6 +20,9 @@ Env config (all optional):
   PARTIAL_REFRESH    set to 1 for flash-free partial updates (Waveshare V4/V3)
   FULL_REFRESH_MINUTES  minutes between ghost-clearing full refreshes when
                      partial refresh is on, default 60
+  HISTORY_FILE       usage history for the web ui chart, default history.jsonl
+                     beside this script
+  HISTORY_DAYS       history retention in days, default 30
 
 Flags:
   --demo   run with synthetic data, no network, no credentials
