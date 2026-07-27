@@ -15,6 +15,9 @@ Environment=QUIET_START=20
 Environment=QUIET_END=7
 ## Uncomment to flip the rendered image 180 degrees
 #Environment=FLIP=1
+## Uncomment to serve the status web ui
+#Environment=WEB_UI=1
+#Environment=WEB_PORT=8080
 Restart=always
 RestartSec=30
 

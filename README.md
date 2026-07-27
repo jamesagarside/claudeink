@@ -125,6 +125,27 @@ sudo systemctl enable --now claudeink
 journalctl -fu claudeink
 ```
 
+## Web UI (optional)
+
+Set `WEB_UI=1` to serve a full-page, e-paper-styled status site (default port 8080,
+`WEB_PORT` to change). Stdlib only — nothing new to install. It shows stat tiles
+with reset countdowns and change-per-hour, pill bars for **every** limit window the
+API reports (the panel only fits three), a usage-history chart with 6h/24h/7d/30d
+ranges and a crosshair tooltip, dark mode, and a live preview of the physical
+frame. The *Refresh now* button wakes the render loop immediately — bypassing quiet
+hours and API backoff, since it's an explicit request. With the ui enabled, every
+successful poll is appended to `history.jsonl` (`HISTORY_FILE`, `HISTORY_DAYS`
+retention) and served to the chart with bucket-max downsampling.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/` | full status page |
+| `/frame.png` | latest rendered frame |
+| `/status` | JSON: all limit windows, updated timestamp, stale flag |
+| `/history?hours=N` | JSON usage history (optional `&points=M`) |
+| `/payload` | last raw API payload |
+| `POST /refresh` | force an immediate fetch + render |
+
 ## Config
 
 All via environment (set them in the unit file):
@@ -138,6 +159,10 @@ All via environment (set them in the unit file):
 | `FLIP` | `0` | set `1` to rotate 180° |
 | `FONT_REGULAR` / `FONT_BOLD` | DejaVu | TTF fonts available on the system |
 | `CREDENTIALS` | `~/.claude/.credentials.json` | |
+| `WEB_UI` | `0` | set `1` to serve the status web ui |
+| `WEB_PORT` | `8080` | web ui port, used with `WEB_UI=1` |
+| `HISTORY_FILE` | `history.jsonl` beside `run.py` | where usage history is recorded for the web ui chart |
+| `HISTORY_DAYS` | `30` | history retention |
 
 Times are rendered in the Pi's local timezone — `sudo timedatectl set-timezone Europe/London`
 if you haven't already.

@@ -16,6 +16,11 @@ Env config (all optional):
   WARN_AT            utilisation % at which bars switch to the accent colour, default 80
   QUIET_START        hour (0-23) to stop refreshing overnight, e.g. 23
   QUIET_END          hour (0-23) to resume, e.g. 7
+  WEB_UI             set to 1 to serve the status web ui
+  WEB_PORT           port for the web ui, default 8080
+  HISTORY_FILE       usage history for the web ui chart, default history.jsonl
+                     beside this script
+  HISTORY_DAYS       history retention in days, default 30
 
 Flags:
   --demo   run with synthetic data, no network, no credentials
@@ -23,6 +28,7 @@ Flags:
   --png    also write the frame to frame.png (handy over ssh)
 """
 
+import io
 import json
 import os
 import sys
@@ -42,6 +48,8 @@ REFRESH_MINUTES = max(1, int(os.environ.get("REFRESH_MINUTES", "1")))
 WARN_AT = float(os.environ.get("WARN_AT", "80"))
 FLIP = os.environ.get("FLIP", "0") == "1"
 PLAN_LABEL = os.environ.get("PLAN_LABEL", "")
+WEB_UI = os.environ.get("WEB_UI", "0") == "1"
+WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
 
 QUIET_START = os.environ.get("QUIET_START")
 QUIET_END = os.environ.get("QUIET_END")
@@ -253,6 +261,58 @@ def extract(payload):
     return out
 
 
+def all_limits(payload):
+    """Every window in the payload, for the web ui and history.
+
+    The panel only has room for three rows; the web ui shows whatever
+    the API reports, including any extra per-model scoped windows.
+    """
+    out = []
+    limits = payload.get("limits")
+    if isinstance(limits, list):
+        for item in limits:
+            if not isinstance(item, dict):
+                continue
+            pct = item.get("percent", item.get("utilization"))
+            try:
+                pct = max(0.0, min(100.0, float(pct)))
+            except (TypeError, ValueError):
+                pct = None
+            reset = parse_reset(item.get("resets_at"))
+            kind = item.get("kind") or ""
+            scope = item.get("scope") or {}
+            model = (scope.get("model") or {}).get("display_name")
+            if kind == "session":
+                label = "Current session"
+            elif kind == "weekly_all":
+                label = "All models"
+            elif kind == "weekly_scoped":
+                label = model or "Scoped"
+            else:
+                label = model or kind or "Window"
+            out.append(
+                {
+                    "label": label,
+                    "kind": kind,
+                    "percent": pct,
+                    "resets_at": reset.isoformat() if reset else None,
+                    "weekly": kind.startswith("weekly"),
+                }
+            )
+    if not out:
+        for label, pct, reset, weekly in extract(payload):
+            out.append(
+                {
+                    "label": label,
+                    "kind": "",
+                    "percent": pct,
+                    "resets_at": reset.isoformat() if reset else None,
+                    "weekly": weekly,
+                }
+            )
+    return out
+
+
 def reset_text(reset, weekly):
     """Match the wording of the native report."""
     if reset is None:
@@ -440,11 +500,23 @@ class NullPanel:
         pass
 
 
-def write_png(img, path="frame.png"):
-    palette = {0: (255, 255, 255), 1: (0, 0, 0), 2: (220, 40, 40)}
+PALETTE = {0: (255, 255, 255), 1: (0, 0, 0), 2: (220, 40, 40)}
+
+
+def to_rgb(img):
     out = Image.new("RGB", img.size)
-    out.putdata([palette.get(p, (255, 255, 255)) for p in list(img.getdata())])
-    out.save(path)
+    out.putdata([PALETTE.get(p, (255, 255, 255)) for p in list(img.getdata())])
+    return out
+
+
+def png_bytes(img):
+    buf = io.BytesIO()
+    to_rgb(img).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def write_png(img, path="frame.png"):
+    to_rgb(img).save(path)
     return path
 
 
@@ -461,11 +533,21 @@ def in_quiet_hours(now=None):
     return start <= hour < end if start < end else (hour >= start or hour < end)
 
 
-def sleep_to_next_tick():
-    """Wake just after the next refresh boundary so the clock stays honest."""
+def wait_for_tick(event=None):
+    """Wake just after the next refresh boundary so the clock stays honest.
+
+    Returns True when woken early by the web ui's refresh button.
+    """
     now = time.time()
     period = REFRESH_MINUTES * 60
-    time.sleep(max(1.0, period - (now % period) + 0.5))
+    delay = max(1.0, period - (now % period) + 0.5)
+    if event is None:
+        time.sleep(delay)
+        return False
+    if event.wait(timeout=delay):
+        event.clear()
+        return True
+    return False
 
 
 def demo_rows():
@@ -492,22 +574,60 @@ def main():
         panel = NullPanel()
         png = True
 
+    web_state = None
+    if WEB_UI and WEB_PORT and not once:
+        try:
+            import history
+            import web
+
+            web_state = web.start(
+                WEB_PORT,
+                history_query=history.query,
+                meta={
+                    "plan": PLAN_LABEL,
+                    "warn_at": WARN_AT,
+                    "refresh_minutes": REFRESH_MINUTES,
+                },
+            )
+            log("web ui on port %d" % WEB_PORT)
+        except Exception as exc:
+            log("web ui disabled (%s)" % exc)
+
     creds = None if demo else load_credentials()
     last_rows = None
+    last_limits = None
+    payload = None
     backoff = 0.0
+    forced = False
 
     while True:
         stale = False
 
         if demo:
             rows = demo_rows()
-        elif time.time() < backoff:
+            last_limits = [
+                {
+                    "label": label,
+                    "kind": "",
+                    "percent": pct,
+                    "resets_at": reset.isoformat() if reset else None,
+                    "weekly": weekly,
+                }
+                for label, pct, reset, weekly in rows
+            ]
+        elif time.time() < backoff and not forced:
             rows, stale = last_rows, True
         else:
             try:
                 if token_expired(creds):
                     creds = refresh_token(creds)
-                rows = extract(fetch_usage(creds))
+                payload = fetch_usage(creds)
+                rows = extract(payload)
+                last_limits = all_limits(payload)
+                if web_state:
+                    import history
+
+                    history.append(last_limits)
                 backoff = 0.0
             except urllib.error.HTTPError as exc:
                 if exc.code == 429:
@@ -531,8 +651,10 @@ def main():
 
         if rows is not None:
             last_rows = rows
-            if once or not in_quiet_hours():
-                img = render(panel.size, rows, panel.colours, stale=stale)
+            img = render(panel.size, rows, panel.colours, stale=stale)
+            if web_state:
+                web_state.update(png_bytes(img), last_limits or [], stale, payload)
+            if once or forced or not in_quiet_hours():
                 panel.show(img)
                 if png:
                     log("wrote " + write_png(img))
@@ -545,7 +667,9 @@ def main():
 
         if once:
             return
-        sleep_to_next_tick()
+        forced = wait_for_tick(web_state.refresh_event if web_state else None)
+        if forced:
+            log("refresh requested via web ui")
 
 
 if __name__ == "__main__":
