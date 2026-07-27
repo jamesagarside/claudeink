@@ -153,6 +153,27 @@ sudo systemctl enable --now claudeink
 journalctl -fu claudeink
 ```
 
+## Web UI (optional)
+
+Set `WEB_UI=1` to serve a full-page, e-paper-styled status site (default port 8080,
+`WEB_PORT` to change). Stdlib only — nothing new to install. It shows stat tiles
+with reset countdowns and change-per-hour, pill bars for **every** limit window the
+API reports (the panel only fits three), a usage-history chart with 6h/24h/7d/30d
+ranges and a crosshair tooltip, dark mode, and a live preview of the physical
+frame. The *Refresh now* button wakes the render loop immediately — bypassing quiet
+hours and API backoff, since it's an explicit request. With the ui enabled, every
+successful poll is appended to `history.jsonl` (`HISTORY_FILE`, `HISTORY_DAYS`
+retention) and served to the chart with bucket-max downsampling.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/` | full status page |
+| `/frame.png` | latest rendered frame |
+| `/status` | JSON: all limit windows, updated timestamp, stale flag |
+| `/history?hours=N` | JSON usage history (optional `&points=M`) |
+| `/payload` | last raw API payload |
+| `POST /refresh` | force an immediate fetch + render |
+
 ## Config
 
 All via environment (set them in the unit file):
