@@ -30,16 +30,28 @@ class State:
         self._limits = []
         self._payload = None
         self._updated = None
+        self._last_ok = None
+        self._error = None
         self._stale = False
         self._meta = meta or {}
         self.refresh_event = threading.Event()
 
-    def update(self, png, limits, stale, payload=None):
+    def update(self, png, limits, stale, payload=None, error=None):
         with self._lock:
             self._png = png
             self._limits = limits
             self._stale = stale
             self._payload = payload
+            self._error = error
+            self._updated = datetime.now().astimezone()
+            if not stale:
+                self._last_ok = self._updated
+
+    def note_error(self, error):
+        """Surface a fetch failure when there's nothing to render yet."""
+        with self._lock:
+            self._error = error
+            self._stale = True
             self._updated = datetime.now().astimezone()
 
     def png(self):
@@ -54,6 +66,8 @@ class State:
         with self._lock:
             return {
                 "updated": self._updated.isoformat() if self._updated else None,
+                "last_ok": self._last_ok.isoformat() if self._last_ok else None,
+                "error": self._error,
                 "stale": self._stale,
                 "limits": self._limits,
                 "meta": self._meta,
@@ -102,6 +116,13 @@ PAGE = """<!doctype html>
   header .clock { margin-left: auto; font-weight: 700; font-size: 20px;
                   font-variant-numeric: tabular-nums; }
   #staleflag { color: var(--ink); font-weight: 700; display: none; }
+  #stalebanner { display: none; margin-top: 16px; border: 2px solid var(--ink);
+                 border-radius: 8px; padding: 12px 16px; background: var(--hatch),
+                 var(--paper-raised); background-size: 100% 4px, auto;
+                 background-repeat: repeat-x, repeat; background-position: top, center; }
+  #stalebanner strong { display: block; margin-bottom: 2px; }
+  #stalebanner .why { color: var(--ink-2); font-size: 13.5px;
+                      overflow-wrap: anywhere; }
 
   .section { display: flex; align-items: center; gap: 10px;
              margin: 28px 0 14px; color: var(--ink-2);
@@ -188,6 +209,11 @@ PAGE = """<!doctype html>
     <span class="clock" id="clock">--:--</span>
   </header>
 
+  <div id="stalebanner" role="alert">
+    <strong>⚠ Showing stale data</strong>
+    <span class="why" id="stalewhy"></span>
+  </div>
+
   <div class="section">Now</div>
   <div class="tiles" id="tiles"></div>
 
@@ -258,6 +284,14 @@ function renderNow() {
   if (!status) return;
   $("plan").textContent = status.meta.plan || "";
   $("staleflag").style.display = status.stale ? "inline" : "none";
+  $("stalebanner").style.display = status.stale ? "block" : "none";
+  if (status.stale) {
+    const since = status.last_ok
+      ? "Last successful update " + new Date(status.last_ok).toLocaleString([], {
+          weekday: "short", hour: "2-digit", minute: "2-digit" }) + ". "
+      : "No successful update since the service started. ";
+    $("stalewhy").textContent = since + (status.error || "");
+  }
 
   const tiles = status.limits.map(item => {
     const d = deltas[item.label];

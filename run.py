@@ -696,6 +696,7 @@ def main():
     payload = None
     backoff = 0.0
     forced = False
+    fetch_error = None
 
     while True:
         stale = False
@@ -726,23 +727,38 @@ def main():
 
                     history.append(last_limits)
                 backoff = 0.0
+                fetch_error = None
             except urllib.error.HTTPError as exc:
+                refreshing = "oauth/token" in (exc.url or "")
                 if exc.code == 429:
                     backoff = time.time() + 300
-                    log("429 from usage api, backing off 5 min")
-                elif exc.code in (401, 403):
+                    fetch_error = "rate limited (429), backing off 5 min"
+                elif exc.code in (401, 403) and not refreshing:
                     log("auth rejected (%d), attempting refresh" % exc.code)
+                    fetch_error = "auth rejected (%d)" % exc.code
                     try:
                         creds = refresh_token(creds)
                     except Exception as inner:
-                        log("refresh failed: %s" % inner)
+                        fetch_error = "token refresh failed: %s" % inner
                         backoff = time.time() + 600
                 else:
-                    log("http %d from usage api" % exc.code)
+                    fetch_error = "http %d from %s" % (
+                        exc.code,
+                        "token refresh" if refreshing else "usage api",
+                    )
+                    if refreshing:
+                        # rotated/revoked refresh token: unrecoverable without
+                        # new credentials, so say so
+                        fetch_error += (
+                            " - credentials likely revoked, re-copy"
+                            " ~/.claude/.credentials.json and restart"
+                        )
                     backoff = time.time() + 120
+                log(fetch_error)
                 rows, stale = last_rows, True
             except Exception as exc:
-                log("poll failed: %s" % exc)
+                fetch_error = "poll failed: %s" % exc
+                log(fetch_error)
                 backoff = time.time() + 120
                 rows, stale = last_rows, True
 
@@ -754,7 +770,10 @@ def main():
             last_rows = rows
             img = render(panel.size, rows, panel.colours, stale=stale)
             if web_state:
-                web_state.update(png_bytes(img), last_limits or [], stale, payload)
+                web_state.update(
+                    png_bytes(img), last_limits or [], stale, payload,
+                    error=fetch_error,
+                )
             if once or forced or not quiet:
                 panel.show(img)
                 if png:
@@ -765,6 +784,10 @@ def main():
                         for l, p, _, _ in rows
                     )
                 )
+        elif web_state and fetch_error:
+            # nothing rendered yet (e.g. failing since startup) - the web ui
+            # should still say why
+            web_state.note_error(fetch_error)
 
         if once:
             return
