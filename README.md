@@ -130,7 +130,7 @@ Log in a second time on your usual machine, into a config directory of its own, 
 that credentials file across:
 
 ```bash
-CLAUDE_CONFIG_DIR=~/.claude-pi claude login
+CLAUDE_CONFIG_DIR=~/.claude-pi claude auth login
 scp ~/.claude-pi/.credentials.json pi@claudeink.local:~/.claude/.credentials.json
 ssh pi@claudeink.local chmod 600 ~/.claude/.credentials.json
 ```
@@ -138,6 +138,13 @@ ssh pi@claudeink.local chmod 600 ~/.claude/.credentials.json
 `CLAUDE_CONFIG_DIR` keeps that login in its own token family, so the Pi rotating its token
 never touches the one Claude Code is using. Both logins are the same account and share its
 usage limits, which is the point: the panel reports on the account you actually work under.
+
+To check the two are really separate before you copy anything, compare:
+
+```bash
+claude auth status                             # your everyday login
+CLAUDE_CONFIG_DIR=~/.claude-pi claude auth status   # the Pi's
+```
 
 **Token refresh:** Claude Code isn't running on the Pi, so nobody is refreshing the access
 token for you — it'd expire in hours. `refresh_token()` handles this itself using the
