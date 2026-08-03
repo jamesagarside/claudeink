@@ -119,19 +119,36 @@ points at `.venv/bin/python` for this reason.
 ### 4. Set Claude credentials
 
 The script reads `~/.claude/.credentials.json` — the same file Claude Code maintains.
-Copy it over from a machine where you're logged in:
+
+**Give the Pi its own login. Don't copy the credentials file you use day to day.**
+Anthropic rotates the refresh token on every exchange: each refresh returns a new one and
+kills the old one. If the Pi and your laptop share a token, they take turns invalidating
+each other, and you get logged out of Claude Code every few hours on whichever machine
+refreshed second. Re-copying the file restarts the same loop.
+
+Log in a second time on your usual machine, into a config directory of its own, and copy
+that credentials file across:
 
 ```bash
-scp ~/.claude/.credentials.json pi@claudeink.local:~/.claude/.credentials.json
+CLAUDE_CONFIG_DIR=~/.claude-pi claude login
+scp ~/.claude-pi/.credentials.json pi@claudeink.local:~/.claude/.credentials.json
 ssh pi@claudeink.local chmod 600 ~/.claude/.credentials.json
 ```
+
+`CLAUDE_CONFIG_DIR` keeps that login in its own token family, so the Pi rotating its token
+never touches the one Claude Code is using. Both logins are the same account and share its
+usage limits, which is the point: the panel reports on the account you actually work under.
 
 **Token refresh:** Claude Code isn't running on the Pi, so nobody is refreshing the access
 token for you — it'd expire in hours. `refresh_token()` handles this itself using the
 `refreshToken` field. That endpoint and client id are reverse-engineered from the Claude
 Code client, not documented API, so treat them as the most fragile part of this project.
 If refresh starts failing you'll see it in the journal and the clock gets a `!` prefix to
-show the data is stale; re-copy the credentials file to recover.
+show the data is stale.
+
+A `refresh rejected` line in the journal means the token was refused outright, which
+usually means something else refreshed it first. That is the shared-credentials trap
+above, so fix it with a dedicated login rather than by copying the same file again.
 
 Nothing about `/api/oauth/usage` is a supported interface either. It can change without warning.
 
